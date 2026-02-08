@@ -127,29 +127,24 @@ struct ConversationDetailView: View {
                 Task { await model.userDraftTextDidChange(newValue) }
             }
             .toolbar {
-                ToolbarItemGroup(placement: .primaryAction) {
-                    Button {
-                        model.copySelectedConversationContext()
-                    } label: {
-                        Label("Copy Context", systemImage: "doc.on.doc")
-                    }
+                ToolbarItem(placement: .primaryAction) {
+                    Menu {
+                        Section("Conversation") {
+                            Button {
+                                Task { await model.refreshConversations() }
+                            } label: {
+                                Label("Refresh messages and participants", systemImage: "arrow.clockwise")
+                            }
 
-                    Button {
-                        Task { await model.refreshConversations() }
+                            Button {
+                                Task { await model.syncAllMessagesForSelected() }
+                            } label: {
+                                Label("Sync entire conversation history", systemImage: "arrow.down.circle")
+                            }
+                        }
                     } label: {
-                        Label("Refresh", systemImage: "arrow.clockwise")
-                    }
-
-                    Button {
-                        Task { await model.syncAllMessagesForSelected() }
-                    } label: {
-                        Label("Sync All", systemImage: "arrow.down.circle")
-                    }
-
-                    Button(role: .destructive) {
-                        Task { await model.logout() }
-                    } label: {
-                        Label("Logout", systemImage: "rectangle.portrait.and.arrow.right")
+                        Image(systemName: "ellipsis.circle")
+                            .accessibilityLabel("Chat Actions")
                     }
                 }
             }
@@ -1155,3 +1150,4 @@ private struct ConversationDetailPreviewHost: View {
     ConversationDetailPreviewHost(model: ConversationDetailPreviewFactory.emptySelectionModel())
         .frame(width: 393, height: 852)
 }
+

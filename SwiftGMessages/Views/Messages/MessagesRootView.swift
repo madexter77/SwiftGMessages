@@ -10,6 +10,7 @@ struct MessagesRootView: View {
 
     @State private var searchText: String = ""
     @State private var showingNewMessageSheet = false
+    @State private var showingSettingsSheet = false
 
     private var filteredConversations: [Conversations_Conversation] {
         let q = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -37,6 +38,17 @@ struct MessagesRootView: View {
             .searchable(text: $searchText, placement: .sidebar)
             .listStyle(.sidebar)
             .toolbar {
+                #if os(iOS)
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        showingSettingsSheet = true
+                    } label: {
+                        Image(systemName: "gearshape")
+                            .accessibilityLabel("Settings")
+                    }
+                }
+                #endif
+
                 ToolbarItem(placement: .primaryAction) {
                     Button {
                         showingNewMessageSheet = true
@@ -52,6 +64,21 @@ struct MessagesRootView: View {
         .sheet(isPresented: $showingNewMessageSheet) {
             NewConversationSheet(isPresented: $showingNewMessageSheet)
         }
+        #if os(iOS)
+        .sheet(isPresented: $showingSettingsSheet) {
+            NavigationStack {
+                SettingsView()
+                    .navigationTitle("Settings")
+                    .toolbar {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Button("Done") {
+                                showingSettingsSheet = false
+                            }
+                        }
+                    }
+            }
+        }
+        #endif
     }
 }
 

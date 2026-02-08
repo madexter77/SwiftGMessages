@@ -155,9 +155,19 @@ struct SettingsView: View {
                     LabeledContent("Bugle version") { Text(version) }
                 }
             }
+
+            Section("Account") {
+                Button(role: .destructive) {
+                    Task { await model.logout() }
+                } label: {
+                    Label("Logout and unpair this device", systemImage: "rectangle.portrait.and.arrow.right")
+                }
+            }
         }
         .formStyle(.grouped)
+        #if os(macOS)
         .frame(minWidth: 620, minHeight: 620)
+        #endif
         .task {
             systemNotificationStatus = await GMNotifications.authorizationStatus()
         }
