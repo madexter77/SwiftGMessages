@@ -27,3 +27,11 @@ Package.resolved
 *.pem
 *.p12
 *.key
+*.p8
+
+# App Store Connect / TestFlight (local-only)
+.asc/
+APP_STORE_CONNECT.md
+fastlane/
+testflight/
+private_keys/
