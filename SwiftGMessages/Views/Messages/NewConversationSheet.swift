@@ -4,13 +4,7 @@ struct NewConversationSheet: View {
     @EnvironmentObject private var model: GMAppModel
     @Binding var isPresented: Bool
 
-    @State private var phoneNumber: String = {
-        #if DEBUG
-        return "4752287656"
-        #else
-        return ""
-        #endif
-    }()
+    @State private var phoneNumber: String = ""
     @State private var initialMessage: String = ""
 
     var body: some View {
