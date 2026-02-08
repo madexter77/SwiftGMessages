@@ -481,14 +481,15 @@ final class GMAppModel: ObservableObject {
 
             await stopOutgoingTypingIfNeeded()
 
-            var content = Client_MessagePayloadContent()
-            content.messageContent = Conversations_MessageContent.with { $0.content = trimmed }
+            var info = Conversations_MessageInfo()
+            var msgContent = Conversations_MessageContent()
+            msgContent.content = trimmed
+            info.messageContent = msgContent
 
             let req = buildSendMessageRequest(
                 conversation: conv,
                 tmpID: tmpID,
-                messagePayloadContent: content,
-                messageInfo: []
+                messageInfo: [info]
             )
 
             let resp = try await client.sendMessage(req)
@@ -554,19 +555,23 @@ final class GMAppModel: ObservableObject {
             _ = upsertConversationFromMessage(placeholder, markUnread: false)
             await cache.saveMessages(conversationID: conversationID, messages: messages, cursor: messagesCursor)
 
-            var content = Client_MessagePayloadContent()
-            if let caption, !caption.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                content.messageContent = Conversations_MessageContent.with { $0.content = caption }
-            }
+            var infos: [Conversations_MessageInfo] = []
+            var mediaInfo = Conversations_MessageInfo()
+            mediaInfo.mediaContent = media
+            infos.append(mediaInfo)
 
-            var info = Conversations_MessageInfo()
-            info.mediaContent = media
+            if let caption, !caption.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                var textInfo = Conversations_MessageInfo()
+                var msgContent = Conversations_MessageContent()
+                msgContent.content = caption
+                textInfo.messageContent = msgContent
+                infos.append(textInfo)
+            }
 
             let req = buildSendMessageRequest(
                 conversation: conv,
                 tmpID: tmpID,
-                messagePayloadContent: content,
-                messageInfo: [info]
+                messageInfo: infos
             )
 
             let resp = try await client.sendMessage(req)
@@ -629,15 +634,23 @@ final class GMAppModel: ObservableObject {
     private func buildSendMessageRequest(
         conversation: Conversations_Conversation,
         tmpID: String,
-        messagePayloadContent: Client_MessagePayloadContent,
         messageInfo: [Conversations_MessageInfo]
     ) -> Client_SendMessageRequest {
         var req = Client_SendMessageRequest()
         req.conversationID = conversation.conversationID
         req.tmpID = tmpID
 
-        if let me = conversation.participants.first(where: { $0.isMe }), me.hasSimPayload {
-            req.simpayload = me.simPayload
+        let simPayload: Settings_SIMPayload? = {
+            if conversation.hasSimCard, conversation.simCard.hasSimdata, conversation.simCard.simdata.hasSimpayload {
+                return conversation.simCard.simdata.simpayload
+            }
+            if let me = conversation.participants.first(where: { $0.isMe }), me.hasSimPayload {
+                return me.simPayload
+            }
+            return nil
+        }()
+        if let simPayload {
+            req.simpayload = simPayload
         }
 
         var payload = Client_MessagePayload()
@@ -645,7 +658,6 @@ final class GMAppModel: ObservableObject {
         payload.conversationID = conversation.conversationID
         payload.participantID = conversation.defaultOutgoingID
         payload.tmpID2 = tmpID
-        payload.messagePayloadContent = messagePayloadContent
         if !messageInfo.isEmpty {
             payload.messageInfo = messageInfo
         }
@@ -682,7 +694,9 @@ final class GMAppModel: ObservableObject {
         var infos: [Conversations_MessageInfo] = []
         if let text, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             var info = Conversations_MessageInfo()
-            info.messageContent = Conversations_MessageContent.with { $0.content = text }
+            var msgContent = Conversations_MessageContent()
+            msgContent.content = text
+            info.messageContent = msgContent
             infos.append(info)
         }
         if let mediaContent {

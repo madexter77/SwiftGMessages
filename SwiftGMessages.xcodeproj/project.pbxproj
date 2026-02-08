@@ -202,7 +202,7 @@
 			mainGroup = 1F3694A72EE5383000189545;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				B1CFB6DCA179C7E722714C35 /* XCLocalSwiftPackageReference "../swift-gmessages" */,
+				B1CFB6DCA179C7E722714C35 /* XCRemoteSwiftPackageReference "swift-gmessages" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 1F3694B12EE5383000189545 /* Products */;
@@ -627,17 +627,21 @@
 		};
 /* End XCConfigurationList section */
 
-/* Begin XCLocalSwiftPackageReference section */
-		B1CFB6DCA179C7E722714C35 /* XCLocalSwiftPackageReference "../swift-gmessages" */ = {
-			isa = XCLocalSwiftPackageReference;
-			relativePath = "../swift-gmessages";
+/* Begin XCRemoteSwiftPackageReference section */
+		B1CFB6DCA179C7E722714C35 /* XCRemoteSwiftPackageReference "swift-gmessages" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/mweinbach/swift-gmessages";
+			requirement = {
+				branch = main;
+				kind = branch;
+			};
 		};
-/* End XCLocalSwiftPackageReference section */
+/* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
 		0CCC92F2B6FBEB5996CEA20A /* LibGM */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = B1CFB6DCA179C7E722714C35 /* XCLocalSwiftPackageReference "../swift-gmessages" */;
+			package = B1CFB6DCA179C7E722714C35 /* XCRemoteSwiftPackageReference "swift-gmessages" */;
 			productName = LibGM;
 		};
 /* End XCSwiftPackageProductDependency section */

@@ -1,5 +1,5 @@
 {
-  "originHash" : "6045cd75f9f3af5fccdc35a561d8ffe7213eaba1259c018faadffc69a13f8ca3",
+  "originHash" : "32885a0606037520c4738ea5fc79af628de149acca52610c39dae80d27fe52d0",
   "pins" : [
     {
       "identity" : "swift-argument-parser",
@@ -26,6 +26,15 @@
       "state" : {
         "revision" : "95ba0316a9b733e92bb6b071255ff46263bbe7dc",
         "version" : "3.15.1"
+      }
+    },
+    {
+      "identity" : "swift-gmessages",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/mweinbach/swift-gmessages",
+      "state" : {
+        "branch" : "main",
+        "revision" : "4523720757be2c1f070888189d26589e5610596f"
       }
     },
     {
