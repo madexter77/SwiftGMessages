@@ -4,6 +4,10 @@ import LinkPresentation
 import SwiftUI
 import UniformTypeIdentifiers
 
+#if canImport(AVFoundation)
+import AVFoundation
+#endif
+
 #if os(macOS)
 import AppKit
 #endif
@@ -11,11 +15,21 @@ import AppKit
 struct ConversationDetailView: View {
     @EnvironmentObject private var model: GMAppModel
 
+    private let bottomAnchorID = "gm-conversation-bottom-anchor"
+    private let bottomComposerClearance: CGFloat = 52
+
     @State private var draftText: String = ""
     @State private var isPickingFile = false
+    @State private var didInitialScrollConversationID: String?
+    @State private var isRecordingVoice = false
+    @State private var voiceRecordingFileURL: URL?
+    #if canImport(AVFoundation)
+    @State private var voiceRecorder: AVAudioRecorder?
+    #endif
 
     var body: some View {
         if let conversationID = model.selectedConversationID {
+            let messageCount = model.messages.count
             ZStack {
                 IMStyle.chatBackground.ignoresSafeArea()
 
@@ -34,67 +48,81 @@ struct ConversationDetailView: View {
                     }
 
                     ScrollViewReader { proxy in
-                        ScrollView {
-                            LazyVStack(spacing: 12) {
-                                HStack {
-                                    Button {
-                                        Task { await model.loadOlderMessages() }
-                                    } label: {
-                                        Text("Load Older Messages")
-                                    }
-                                    .buttonStyle(.borderless)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-
-                                    Spacer()
-                                }
-                                .padding(.top, 8)
-
-                                let isGroupChat = model.conversations.first(where: { $0.conversationID == conversationID })?.isGroupChat ?? false
-                                let lastOutgoingID = model.messages.last(where: { $0.hasSenderParticipant && $0.senderParticipant.isMe })?.messageID
-                                ForEach(model.messages, id: \.messageID) { msg in
-                                    MessageBubbleRow(message: msg, isGroupChat: isGroupChat, lastOutgoingMessageID: lastOutgoingID)
-                                        .id(msg.messageID)
-                                }
-
-                                if let typing = model.typingIndicatorText {
+                        GeometryReader { scrollGeometry in
+                            ScrollView {
+                                LazyVStack(spacing: 12) {
                                     HStack {
-                                        Text(typing)
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
+                                        Button {
+                                            Task { await model.loadOlderMessages() }
+                                        } label: {
+                                            Text("Load Older Messages")
+                                        }
+                                        .buttonStyle(.borderless)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+
                                         Spacer()
                                     }
-                                    .padding(.top, 4)
+                                    .padding(.top, 8)
+
+                                    let isGroupChat = model.conversations.first(where: { $0.conversationID == conversationID })?.isGroupChat ?? false
+                                    let lastOutgoingID = model.messages.last(where: { $0.hasSenderParticipant && $0.senderParticipant.isMe })?.messageID
+                                    ForEach(model.messages, id: \.messageID) { msg in
+                                        MessageBubbleRow(message: msg, isGroupChat: isGroupChat, lastOutgoingMessageID: lastOutgoingID)
+                                            .id(msg.messageID)
+                                    }
+
+                                    if let typing = model.typingIndicatorText {
+                                        HStack {
+                                            Text(typing)
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
+                                            Spacer()
+                                        }
+                                        .padding(.top, 4)
+                                    }
+
+                                    Color.clear
+                                        .frame(height: bottomComposerClearance)
+
+                                    Color.clear
+                                        .frame(height: 1)
+                                        .id(bottomAnchorID)
                                 }
+                                .padding(.horizontal, 14)
+                                .padding(.bottom, 10)
+                                .frame(maxWidth: .infinity)
+                                .frame(minHeight: scrollGeometry.size.height, alignment: .bottom)
                             }
-                            .padding(.horizontal, 14)
-                            .padding(.bottom, 10)
-                        }
-                        .onChange(of: model.messages.count) { _, _ in
-                            scrollToBottom(proxy: proxy)
-                        }
-                        .onAppear {
-                            scrollToBottom(proxy: proxy)
+                            .defaultScrollAnchor(.bottom)
+                            .onAppear {
+                                scrollToBottomIfNeeded(proxy: proxy, conversationID: conversationID)
+                            }
+                            .onChange(of: conversationID) { _, newConversationID in
+                                scrollToBottomIfNeeded(proxy: proxy, conversationID: newConversationID)
+                            }
+                            .onChange(of: messageCount) { _, _ in
+                                scrollToBottomIfNeeded(proxy: proxy, conversationID: conversationID)
+                            }
                         }
                     }
-
-                    Divider()
-
-                    ComposerBar(
-                        text: $draftText,
-                        onAttach: { isPickingFile = true },
-                        onSend: {
-                            let toSend = draftText
-                            draftText = ""
-                            Task { await model.sendMessage(text: toSend) }
-                        }
-                    )
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 10)
-                    .background(.regularMaterial)
                 }
             }
+            .overlay(alignment: .bottom) {
+                ComposerBar(
+                    text: $draftText,
+                    isRecordingVoice: isRecordingVoice,
+                    onAttach: { isPickingFile = true },
+                    onSend: sendDraftMessage,
+                    onVoiceAction: { Task { await toggleVoiceRecording() } }
+                )
+                .padding(.horizontal, 10)
+                .padding(.bottom, 4)
+            }
             .navigationTitle(conversationTitle(for: conversationID))
+            .onDisappear {
+                Task { await stopVoiceRecording(send: false) }
+            }
             .onChange(of: draftText) { _, newValue in
                 Task { await model.userDraftTextDidChange(newValue) }
             }
@@ -149,6 +177,136 @@ struct ConversationDetailView: View {
         }
     }
 
+    private func sendDraftMessage() {
+        let toSend = draftText
+        draftText = ""
+        Task { await model.sendMessage(text: toSend) }
+    }
+
+    @MainActor
+    private func toggleVoiceRecording() async {
+        if isRecordingVoice {
+            await stopVoiceRecording(send: true)
+        } else {
+            await startVoiceRecording()
+        }
+    }
+
+    @MainActor
+    private func startVoiceRecording() async {
+        #if canImport(AVFoundation)
+        guard await requestMicrophonePermissionIfNeeded() else {
+            if model.errorMessage == nil || model.errorMessage?.isEmpty == true {
+                model.errorMessage = "Microphone permission was denied."
+            }
+            return
+        }
+
+        do {
+            #if os(iOS)
+            let session = AVAudioSession.sharedInstance()
+            try session.setCategory(.playAndRecord, mode: .spokenAudio, options: [.defaultToSpeaker, .allowBluetooth])
+            try session.setActive(true)
+            #endif
+
+            let recordingsDir = FileManager.default.temporaryDirectory.appendingPathComponent("voice-recordings", isDirectory: true)
+            try FileManager.default.createDirectory(at: recordingsDir, withIntermediateDirectories: true)
+            let fileURL = recordingsDir.appendingPathComponent("voice-\(UUID().uuidString).m4a")
+
+            let settings: [String: Any] = [
+                AVFormatIDKey: Int(kAudioFormatMPEG4AAC),
+                AVSampleRateKey: 44_100.0,
+                AVNumberOfChannelsKey: 1,
+                AVEncoderBitRateKey: 96_000,
+                AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue
+            ]
+
+            let recorder = try AVAudioRecorder(url: fileURL, settings: settings)
+            guard recorder.prepareToRecord(), recorder.record() else {
+                throw NSError(
+                    domain: "SwiftGMessages",
+                    code: 6001,
+                    userInfo: [NSLocalizedDescriptionKey: "Recorder failed to start."]
+                )
+            }
+
+            voiceRecorder = recorder
+            voiceRecordingFileURL = fileURL
+            isRecordingVoice = true
+            model.errorMessage = nil
+        } catch {
+            model.errorMessage = "Failed to start voice recording: \(error.localizedDescription)"
+            await stopVoiceRecording(send: false)
+        }
+        #else
+        model.errorMessage = "Voice recording isn't available on this platform."
+        #endif
+    }
+
+    @MainActor
+    private func stopVoiceRecording(send: Bool) async {
+        #if canImport(AVFoundation)
+        voiceRecorder?.stop()
+        voiceRecorder = nil
+        #if os(iOS)
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        #endif
+        #endif
+
+        isRecordingVoice = false
+
+        guard let fileURL = voiceRecordingFileURL else { return }
+        voiceRecordingFileURL = nil
+
+        if !send {
+            try? FileManager.default.removeItem(at: fileURL)
+            return
+        }
+
+        let fileSize = (try? fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+        guard fileSize > 0 else {
+            model.errorMessage = "Voice recording was empty."
+            try? FileManager.default.removeItem(at: fileURL)
+            return
+        }
+
+        await model.sendMedia(fileURL: fileURL, caption: nil)
+        try? FileManager.default.removeItem(at: fileURL)
+    }
+
+    @MainActor
+    private func requestMicrophonePermissionIfNeeded() async -> Bool {
+        #if canImport(AVFoundation)
+        #if os(iOS)
+        guard Bundle.main.object(forInfoDictionaryKey: "NSMicrophoneUsageDescription") != nil else {
+            model.errorMessage = "Missing NSMicrophoneUsageDescription in app configuration."
+            return false
+        }
+
+        return await withCheckedContinuation { continuation in
+            AVAudioSession.sharedInstance().requestRecordPermission { granted in
+                continuation.resume(returning: granted)
+            }
+        }
+        #elseif os(macOS)
+        guard Bundle.main.object(forInfoDictionaryKey: "NSMicrophoneUsageDescription") != nil else {
+            model.errorMessage = "Missing NSMicrophoneUsageDescription in app configuration."
+            return false
+        }
+
+        return await withCheckedContinuation { continuation in
+            AVCaptureDevice.requestAccess(for: .audio) { granted in
+                continuation.resume(returning: granted)
+            }
+        }
+        #else
+        return false
+        #endif
+        #else
+        return false
+        #endif
+    }
+
     private func conversationTitle(for id: String) -> String {
         if let conv = model.conversations.first(where: { $0.conversationID == id }) {
             return conv.name.isEmpty ? conv.conversationID : conv.name
@@ -156,11 +314,40 @@ struct ConversationDetailView: View {
         return id
     }
 
-    private func scrollToBottom(proxy: ScrollViewProxy) {
-        guard let lastID = model.messages.last?.messageID else { return }
-        withAnimation(.easeOut(duration: 0.2)) {
-            proxy.scrollTo(lastID, anchor: .bottom)
+    private func scrollToBottomIfNeeded(proxy: ScrollViewProxy, conversationID: String) {
+        guard model.selectedConversationID == conversationID else { return }
+
+        let isInitialScroll = didInitialScrollConversationID != conversationID
+        let performScroll = {
+            guard model.selectedConversationID == conversationID else { return }
+            let didScroll = scrollToBottom(proxy: proxy, animated: !isInitialScroll)
+            if didScroll, isInitialScroll {
+                didInitialScrollConversationID = conversationID
+            }
         }
+        performScroll()
+
+        if isInitialScroll {
+            // One additional pass catches cases where layout finalizes after onAppear.
+            DispatchQueue.main.async(execute: performScroll)
+        }
+    }
+
+    @discardableResult
+    private func scrollToBottom(proxy: ScrollViewProxy, animated: Bool) -> Bool {
+        if animated {
+            withAnimation(.easeOut(duration: 0.2)) {
+                proxy.scrollTo(bottomAnchorID, anchor: .bottom)
+            }
+        } else {
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) {
+                proxy.scrollTo(bottomAnchorID, anchor: .bottom)
+            }
+        }
+
+        return true
     }
 }
 
@@ -173,7 +360,7 @@ private struct MessageBubbleRow: View {
     let isGroupChat: Bool
     let lastOutgoingMessageID: String?
 
-    @State private var isHovering = false
+    @State private var isShowingDetails = false
 
     var body: some View {
         let isOutgoing = message.hasSenderParticipant ? message.senderParticipant.isMe : false
@@ -202,6 +389,7 @@ private struct MessageBubbleRow: View {
                             .tint(isOutgoing ? .white.opacity(0.95) : IMStyle.outgoingBubble)
                     }
 
+                    #if os(macOS)
                     if linkPreviewsEnabled, let url = firstURL(in: messageText) {
                         InlineLinkPreview(
                             url: url,
@@ -209,13 +397,18 @@ private struct MessageBubbleRow: View {
                             autoLoad: autoLoadLinkPreviews
                         )
                     }
+                    #endif
 
                     ForEach(mediaItems) { item in
+                        #if os(macOS)
                         if item.isImageLike {
                             InlineImageAttachment(media: item.media, isOutgoing: isOutgoing)
                         } else {
                             AttachmentCard(media: item.media, isOutgoing: isOutgoing)
                         }
+                        #else
+                        AttachmentCard(media: item.media, isOutgoing: isOutgoing)
+                        #endif
                     }
                 }
                 .padding(.vertical, 9)
@@ -249,7 +442,7 @@ private struct MessageBubbleRow: View {
                 }
 
                 #if os(macOS)
-                if isHovering {
+                if isShowingDetails {
                     Text(timestampText)
                         .font(.caption2)
                         .foregroundStyle(.secondary)
@@ -264,9 +457,9 @@ private struct MessageBubbleRow: View {
             if !isOutgoing { Spacer(minLength: 60) }
         }
         #if os(macOS)
-        .onHover { hovering in
+        .onTapGesture {
             withAnimation(.easeOut(duration: 0.15)) {
-                isHovering = hovering
+                isShowingDetails.toggle()
             }
         }
         #endif
@@ -723,44 +916,242 @@ private struct ReactionCapsule: View {
 
 private struct ComposerBar: View {
     @Binding var text: String
+    let isRecordingVoice: Bool
     let onAttach: () -> Void
     let onSend: () -> Void
+    let onVoiceAction: () -> Void
 
     var body: some View {
         let canSend = !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
 
-        HStack(alignment: .bottom, spacing: 10) {
+        HStack(alignment: .center, spacing: 10) {
             Button {
                 onAttach()
             } label: {
-                Image(systemName: "plus.circle.fill")
-                    .font(.system(size: 22, weight: .semibold))
-                    .foregroundStyle(.secondary)
+                Image(systemName: "plus")
+                    .font(.system(size: 17, weight: .semibold))
+                    .frame(width: 30, height: 30)
             }
             .buttonStyle(.plain)
+            .glassEffect(.regular.tint(.white.opacity(0.16)).interactive(), in: Circle())
             .help("Attach a file")
 
-            TextField("iMessage", text: $text, axis: .vertical)
-                .textFieldStyle(.plain)
-                .lineLimit(1...6)
-                .padding(.vertical, 8)
-                .padding(.horizontal, 12)
-                .background(IMStyle.incomingBubble, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .strokeBorder(.secondary.opacity(0.12))
-                }
+            HStack(alignment: .center, spacing: 8) {
+                TextField("Message", text: $text, axis: .vertical)
+                    .textFieldStyle(.plain)
+                    .lineLimit(1...6)
+                    .font(.system(size: 15))
+                    .padding(.leading, 11)
+                    .padding(.vertical, 7)
 
-            Button {
-                onSend()
-            } label: {
-                Image(systemName: "arrow.up.circle.fill")
-                    .font(.system(size: 28, weight: .semibold))
-                    .foregroundStyle(canSend ? IMStyle.outgoingBubble : .secondary.opacity(0.35))
+                if canSend {
+                    Button {
+                        onSend()
+                    } label: {
+                        Image(systemName: "arrow.up")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .frame(width: 24, height: 24)
+                            .background {
+                                Circle()
+                                    .fill(IMStyle.outgoingBubble)
+                            }
+                    }
+                    .buttonStyle(.plain)
+                    .keyboardShortcut(.return, modifiers: [])
+                    .accessibilityLabel("Send message")
+                } else {
+                    Button {
+                        onVoiceAction()
+                    } label: {
+                        Image(systemName: isRecordingVoice ? "stop.fill" : "waveform")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(isRecordingVoice ? Color.red : Color.secondary)
+                            .frame(width: 24, height: 24, alignment: .center)
+                            .background {
+                                if isRecordingVoice {
+                                    Circle()
+                                        .fill(Color.red.opacity(0.14))
+                                }
+                            }
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(isRecordingVoice ? "Stop recording and send voice message" : "Record voice message")
+                }
             }
-            .buttonStyle(.plain)
-            .keyboardShortcut(.return, modifiers: [])
-            .disabled(!canSend)
+            .padding(.trailing, 6)
+            .frame(minHeight: 36)
+            .glassEffect(.regular.interactive(), in: Capsule())
         }
     }
+}
+
+@MainActor
+private enum ConversationDetailPreviewFactory {
+    static func populatedModel() -> GMAppModel {
+        let model = GMAppModel()
+        let now = unixMillis(Date())
+        let conversation = makeConversation(now: now)
+
+        model.screen = .ready
+        model.conversations = [conversation]
+        model.selectedConversationID = conversation.conversationID
+        model.messages = makeMessages(conversationID: conversation.conversationID, now: now)
+        model.typingIndicatorText = "Maya is typing..."
+        model.isSyncingAllMessages = true
+        model.syncProgressText = "Syncing 24 of 80 messages..."
+        return model
+    }
+
+    static func emptySelectionModel() -> GMAppModel {
+        let model = GMAppModel()
+        model.screen = .ready
+        model.conversations = [makeConversation(now: unixMillis(Date()))]
+        model.selectedConversationID = nil
+        model.messages = []
+        model.typingIndicatorText = nil
+        model.isSyncingAllMessages = false
+        model.syncProgressText = ""
+        return model
+    }
+
+    private static func makeConversation(now: Int64) -> Conversations_Conversation {
+        var conversation = Conversations_Conversation()
+        conversation.conversationID = "preview-conversation"
+        conversation.name = "UI Design Crew"
+        conversation.isGroupChat = true
+        conversation.avatarHexColor = "#1485FF"
+        conversation.lastMessageTimestamp = now
+        conversation.latestMessageID = "message-24"
+        conversation.latestMessage.displayContent = "Now it behaves like Messages from the bottom."
+        conversation.latestMessage.displayName = "Me"
+        conversation.latestMessage.fromMe = 1
+        conversation.defaultOutgoingID = "me"
+
+        var me = Conversations_Participant()
+        me.id.number = "me"
+        me.isMe = true
+        me.firstName = "Me"
+        conversation.participants = [me]
+
+        return conversation
+    }
+
+    private static func makeMessages(conversationID: String, now: Int64) -> [Conversations_Message] {
+        let transcript: [(senderName: String, isMe: Bool, text: String, status: Conversations_MessageStatusType?)] = [
+            ("Maya", false, "Can we tighten up the vertical spacing in the composer?", nil),
+            ("Me", true, "Yep. I also want to tune the bubble corner radius on iOS.", .outgoingDelivered),
+            ("Alex", false, "Let's verify both compact and regular layouts in previews.", nil),
+            ("Maya", false, "Also check pointer hover states on macOS.", nil),
+            ("Me", true, "I switched the field to a single capsule and removed stacked layers.", .outgoingDelivered),
+            ("Alex", false, "Great. Did we keep the placeholder generic?", nil),
+            ("Me", true, "Yes, it now says Message.", .outgoingDelivered),
+            ("Maya", false, "Can we make the bar slightly smaller?", nil),
+            ("Me", true, "Done. Reduced height and inner padding.", .outgoingDelivered),
+            ("Alex", false, "How does it behave with many messages?", nil),
+            ("Me", true, "Auto-scroll tracks new items, but I want to harden initial placement.", .outgoingDelivered),
+            ("Maya", false, "Perfect, start from the latest like Messages.", nil),
+            ("Me", true, "Implemented bottom anchoring plus scroll after first layout pass.", .outgoingDelivered),
+            ("Alex", false, "Nice. Let's keep this as the default preview thread.", nil),
+            ("Maya", false, "Looks good in both iPhone and Mac widths.", nil),
+            ("Me", true, "Final tweak looks right. Shipping.", .outgoingDisplayed),
+            ("Alex", false, "Can we stress it with an even longer thread preview?", nil),
+            ("Me", true, "Added more rows so both platforms show realistic scroll behavior.", .outgoingDelivered),
+            ("Maya", false, "Does it start at the latest message now?", nil),
+            ("Me", true, "Yes. We anchor to bottom and keep new messages pinned there.", .outgoingDelivered),
+            ("Alex", false, "Great. That should feel like native Messages.", nil),
+            ("Me", true, "Now it behaves like Messages from the bottom.", .outgoingDisplayed),
+            ("Maya", false, "Ship it.", nil),
+            ("Me", true, "Done.", .outgoingDisplayed),
+        ]
+
+        let firstTimestamp = now - Int64(transcript.count - 1) * 95_000
+        return transcript.enumerated().map { idx, entry in
+            makeTextMessage(
+                id: "message-\(idx + 1)",
+                conversationID: conversationID,
+                senderName: entry.senderName,
+                isMe: entry.isMe,
+                text: entry.text,
+                timestamp: firstTimestamp + Int64(idx) * 95_000,
+                status: entry.status
+            )
+        }
+    }
+
+    private static func makeTextMessage(
+        id: String,
+        conversationID: String,
+        senderName: String,
+        isMe: Bool,
+        text: String,
+        timestamp: Int64,
+        status: Conversations_MessageStatusType? = nil
+    ) -> Conversations_Message {
+        var message = Conversations_Message()
+        message.messageID = id
+        message.conversationID = conversationID
+        message.timestamp = timestamp
+        message.participantID = isMe ? "me" : senderName.lowercased()
+
+        var participant = Conversations_Participant()
+        participant.isMe = isMe
+        participant.firstName = senderName
+        participant.fullName = senderName
+        message.senderParticipant = participant
+
+        var messageInfo = Conversations_MessageInfo()
+        var messageContent = Conversations_MessageContent()
+        messageContent.content = text
+        messageInfo.messageContent = messageContent
+        message.messageInfo = [messageInfo]
+
+        if let status {
+            var messageStatus = Conversations_MessageStatus()
+            messageStatus.status = status
+            message.messageStatus = messageStatus
+        }
+
+        return message
+    }
+
+    private static func unixMillis(_ date: Date) -> Int64 {
+        Int64(date.timeIntervalSince1970 * 1_000)
+    }
+}
+
+@MainActor
+private struct ConversationDetailPreviewHost: View {
+    @StateObject private var model: GMAppModel
+
+    init(model: GMAppModel) {
+        _model = StateObject(wrappedValue: model)
+    }
+
+    var body: some View {
+        NavigationStack {
+            ConversationDetailView()
+        }
+        .environmentObject(model)
+    }
+}
+
+#Preview("macOS - Conversation") {
+    ConversationDetailPreviewHost(model: ConversationDetailPreviewFactory.populatedModel())
+        .frame(width: 1_050, height: 700)
+}
+
+#Preview("iOS - Conversation") {
+    ConversationDetailPreviewHost(model: ConversationDetailPreviewFactory.populatedModel())
+        .frame(width: 393, height: 852)
+}
+
+#Preview("macOS - Empty State") {
+    ConversationDetailPreviewHost(model: ConversationDetailPreviewFactory.emptySelectionModel())
+        .frame(width: 1_050, height: 700)
+}
+
+#Preview("iOS - Empty State") {
+    ConversationDetailPreviewHost(model: ConversationDetailPreviewFactory.emptySelectionModel())
+        .frame(width: 393, height: 852)
 }

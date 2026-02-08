@@ -9,7 +9,7 @@ actor GMEventStreamHandler: GMEventHandler {
         bufferingPolicy: AsyncStream<GMEvent>.Continuation.BufferingPolicy = .unbounded
     ) -> AsyncStream<GMEvent> {
         AsyncStream(bufferingPolicy: bufferingPolicy) { continuation in
-            Task { await self.installContinuation(continuation) }
+            Task { self.installContinuation(continuation) }
         }
     }
 
