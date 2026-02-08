@@ -59,6 +59,12 @@ enum GMNotifications {
             content.subtitle = subtitle
         }
         content.body = body
+        content.categoryIdentifier = "gm.message.incoming"
+        content.targetContentIdentifier = identifier
+        content.summaryArgument = title
+        content.summaryArgumentCount = 1
+        content.interruptionLevel = .active
+        content.relevanceScore = 1.0
         if let threadIdentifier, !threadIdentifier.isEmpty {
             content.threadIdentifier = threadIdentifier
         }

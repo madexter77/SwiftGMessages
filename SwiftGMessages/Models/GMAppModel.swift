@@ -2195,35 +2195,126 @@ final class GMAppModel: ObservableObject {
 
         let previewEnabled = UserDefaults.standard.bool(forKey: GMPreferences.notificationsPreview)
         let playSound = UserDefaults.standard.bool(forKey: GMPreferences.notificationsSound)
+        let conversation = conversations.first(where: { $0.conversationID == msg.conversationID })
 
-        let title: String = conversations.first(where: { $0.conversationID == msg.conversationID }).map {
-            $0.name.isEmpty ? $0.conversationID : $0.name
-        } ?? "Message"
-
-        let body: String = {
-            guard previewEnabled else { return "New message" }
-            for info in msg.messageInfo {
-                if case .messageContent(let c)? = info.data, !c.content.isEmpty {
-                    return c.content
-                }
-            }
-            for info in msg.messageInfo {
-                if case .mediaContent(let m)? = info.data {
-                    if !m.mediaName.isEmpty { return m.mediaName }
-                    return "Attachment"
-                }
-            }
-            return "New message"
+        let senderName = notificationSenderDisplayName(for: msg, conversation: conversation)
+        let conversationName = notificationConversationDisplayName(conversation)
+        let isGroup = isGroupConversation(conversation)
+        let subtitle: String? = {
+            guard isGroup else { return nil }
+            guard let conversationName else { return "Group message" }
+            return conversationName == senderName ? "Group message" : conversationName
         }()
+
+        let body = notificationBody(
+            for: msg,
+            previewEnabled: previewEnabled,
+            senderName: senderName,
+            conversationName: conversationName
+        )
 
         await GMNotifications.postMessageNotification(
             identifier: id,
             threadIdentifier: msg.conversationID,
-            title: title,
-            subtitle: nil,
+            title: senderName,
+            subtitle: subtitle,
             body: body,
             playSound: playSound
         )
+    }
+
+    private func notificationSenderDisplayName(
+        for msg: Conversations_Message,
+        conversation: Conversations_Conversation?
+    ) -> String {
+        if msg.hasSenderParticipant,
+           let senderName = participantName(msg.senderParticipant),
+           !senderName.isEmpty
+        {
+            return senderName
+        }
+
+        if let conversation {
+            if let participant = conversation.participants.first(where: { !$0.isMe }),
+               let participantDisplayName = participantName(participant),
+               !participantDisplayName.isEmpty
+            {
+                return participantDisplayName
+            }
+
+            let namedConversation = conversation.name.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !namedConversation.isEmpty {
+                return namedConversation
+            }
+        }
+
+        return "Message"
+    }
+
+    private func notificationConversationDisplayName(_ conversation: Conversations_Conversation?) -> String? {
+        guard let conversation else { return nil }
+
+        let namedConversation = conversation.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !namedConversation.isEmpty {
+            return namedConversation
+        }
+
+        let participantNames = uniqueNames(
+            conversation.participants
+                .filter { !$0.isMe }
+                .compactMap(participantName)
+        )
+
+        guard participantNames.count > 1 else { return nil }
+        return participantNames.prefix(3).joined(separator: ", ")
+    }
+
+    private func isGroupConversation(_ conversation: Conversations_Conversation?) -> Bool {
+        guard let conversation else { return false }
+        return conversation.participants.filter { !$0.isMe }.count > 1
+    }
+
+    private func notificationBody(
+        for msg: Conversations_Message,
+        previewEnabled: Bool,
+        senderName: String,
+        conversationName: String?
+    ) -> String {
+        guard previewEnabled else {
+            if let conversationName, !conversationName.isEmpty, conversationName != senderName {
+                return "New message in \(conversationName)"
+            }
+            return "New message"
+        }
+
+        for info in msg.messageInfo {
+            if case .messageContent(let c)? = info.data, !c.content.isEmpty {
+                return c.content
+            }
+        }
+        for info in msg.messageInfo {
+            if case .mediaContent(let m)? = info.data {
+                if !m.mediaName.isEmpty { return m.mediaName }
+                return "Attachment"
+            }
+        }
+        return "New message"
+    }
+
+    private func uniqueNames(_ names: [String]) -> [String] {
+        var seen = Set<String>()
+        var ordered: [String] = []
+        ordered.reserveCapacity(names.count)
+
+        for name in names {
+            let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { continue }
+            if seen.insert(trimmed).inserted {
+                ordered.append(trimmed)
+            }
+        }
+
+        return ordered
     }
 
     private func handleTypingEvent(_ data: Events_TypingData) {
