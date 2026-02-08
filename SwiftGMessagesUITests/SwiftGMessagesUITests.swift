@@ -24,18 +24,25 @@ final class SwiftGMessagesUITests: XCTestCase {
 
     @MainActor
     func testExample() throws {
-        // UI tests must launch the application that they test.
         let app = XCUIApplication()
-        app.launch()
-
-        // Use XCTAssert and related functions to verify your tests produce the correct results.
+        activateAndAssertForeground(app)
     }
 
     @MainActor
     func testLaunchPerformance() throws {
-        // This measures how long it takes to launch your application.
-        measure(metrics: [XCTApplicationLaunchMetric()]) {
-            XCUIApplication().launch()
+        measure(metrics: [XCTOSSignpostMetric.applicationLaunch]) {
+            let app = XCUIApplication()
+            activateAndAssertForeground(app)
+            app.terminate()
         }
+    }
+
+    @MainActor
+    private func activateAndAssertForeground(_ app: XCUIApplication) {
+        app.activate()
+        XCTAssertTrue(
+            app.wait(for: .runningForeground, timeout: 20),
+            "Expected app to be running in foreground but got state \(app.state.rawValue)"
+        )
     }
 }

@@ -11,6 +11,7 @@ import UserNotifications
 @main
 struct SwiftGMessagesApp: App {
     @StateObject private var model = GMAppModel()
+    @Environment(\.scenePhase) private var scenePhase
 
     init() {
         UNUserNotificationCenter.current().delegate = GMNotificationDelegate.shared
@@ -22,6 +23,9 @@ struct SwiftGMessagesApp: App {
                 .environmentObject(model)
                 .task {
                     await model.start()
+                }
+                .onChange(of: scenePhase) { _, newPhase in
+                    Task { await model.handleScenePhaseChange(newPhase) }
                 }
                 #if os(macOS)
                 .frame(minWidth: 980, minHeight: 640)

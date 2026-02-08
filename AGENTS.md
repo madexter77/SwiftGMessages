@@ -19,7 +19,6 @@ Run from repository root:
 open SwiftGMessages.xcodeproj
 xcodebuild -project SwiftGMessages.xcodeproj -scheme SwiftGMessages -destination 'platform=macOS' build
 xcodebuild -project SwiftGMessages.xcodeproj -scheme SwiftGMessages -destination 'platform=macOS' test -only-testing:SwiftGMessagesTests
-xcodebuild -project SwiftGMessages.xcodeproj -scheme SwiftGMessages -destination 'platform=macOS' test -only-testing:SwiftGMessagesUITests
 ```
 
 - `open ...` opens the project in Xcode for interactive development.

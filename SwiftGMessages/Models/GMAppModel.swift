@@ -4,15 +4,238 @@ import CryptoKit
 import LibGM
 import GMProto
 import LinkPresentation
+import SwiftUI
 import UniformTypeIdentifiers
 
 #if os(macOS)
 import AppKit
 #endif
 
+protocol GMClientProtocol: AnyObject {
+    var isConnected: Bool { get async }
+    var isLoggedIn: Bool { get async }
+
+    func connect() async throws
+    func disconnect() async
+    func reconnect() async throws
+    func connectBackground() async throws
+
+    func startLogin() async throws -> String
+    func saveAuthData(to store: AuthDataStore) async throws
+    func unpair() async throws
+
+    func listConversationsPage(
+        count: Int,
+        folder: Client_ListConversationsRequest.Folder,
+        cursor: Client_Cursor?
+    ) async throws -> Client_ListConversationsResponse
+
+    func fetchMessages(
+        conversationID: String,
+        count: Int,
+        cursor: Client_Cursor?
+    ) async throws -> (messages: [Conversations_Message], cursor: Client_Cursor?)
+
+    func fetchMessagesPage(
+        conversationID: String,
+        count: Int,
+        cursor: Client_Cursor?
+    ) async throws -> Client_ListMessagesResponse
+
+    func sendMessage(_ request: Client_SendMessageRequest) async throws -> Client_SendMessageResponse
+    func uploadMedia(data: Data, fileName: String, mimeType: String) async throws -> Conversations_MediaContent
+    func downloadMedia(mediaID: String, decryptionKey: Data) async throws -> Data
+
+    func deleteMessage(messageID: String) async throws -> Bool
+    func sendReaction(
+        messageID: String,
+        emoji: String,
+        action: Client_SendReactionRequest.Action
+    ) async throws
+
+    func updateConversationStatus(
+        conversationID: String,
+        status: Conversations_ConversationStatus
+    ) async throws
+
+    func setConversationMuted(conversationID: String, isMuted: Bool) async throws
+    func getConversation(id conversationID: String) async throws -> Conversations_Conversation
+
+    func getOrCreateConversation(
+        numbers: [String],
+        rcsGroupName: String?,
+        createRCSGroup: Bool
+    ) async throws -> Client_GetOrCreateConversationResponse
+
+    func markRead(conversationID: String, messageID: String) async throws
+    func setTyping(conversationID: String, isTyping: Bool) async throws
+    func registerPush(keys: PushKeys) async throws
+}
+
+actor GMLiveClient: GMClientProtocol {
+    private let client: GMClient
+
+    init(client: GMClient) {
+        self.client = client
+    }
+
+    var isConnected: Bool {
+        get async { await client.isConnected }
+    }
+
+    var isLoggedIn: Bool {
+        get async { await client.isLoggedIn }
+    }
+
+    func connect() async throws { try await client.connect() }
+    func disconnect() async { await client.disconnect() }
+    func reconnect() async throws { try await client.reconnect() }
+    func connectBackground() async throws { try await client.connectBackground() }
+
+    func startLogin() async throws -> String {
+        try await client.startLogin()
+    }
+
+    func saveAuthData(to store: AuthDataStore) async throws {
+        try await client.saveAuthData(to: store)
+    }
+
+    func unpair() async throws {
+        try await client.unpair()
+    }
+
+    func listConversationsPage(
+        count: Int,
+        folder: Client_ListConversationsRequest.Folder,
+        cursor: Client_Cursor?
+    ) async throws -> Client_ListConversationsResponse {
+        try await client.listConversationsPage(count: count, folder: folder, cursor: cursor)
+    }
+
+    func fetchMessages(
+        conversationID: String,
+        count: Int,
+        cursor: Client_Cursor?
+    ) async throws -> (messages: [Conversations_Message], cursor: Client_Cursor?) {
+        try await client.fetchMessages(conversationID: conversationID, count: count, cursor: cursor)
+    }
+
+    func fetchMessagesPage(
+        conversationID: String,
+        count: Int,
+        cursor: Client_Cursor?
+    ) async throws -> Client_ListMessagesResponse {
+        try await client.fetchMessagesPage(conversationID: conversationID, count: count, cursor: cursor)
+    }
+
+    func sendMessage(_ request: Client_SendMessageRequest) async throws -> Client_SendMessageResponse {
+        try await client.sendMessage(request)
+    }
+
+    func uploadMedia(data: Data, fileName: String, mimeType: String) async throws -> Conversations_MediaContent {
+        try await client.uploadMedia(data: data, fileName: fileName, mimeType: mimeType)
+    }
+
+    func downloadMedia(mediaID: String, decryptionKey: Data) async throws -> Data {
+        try await client.downloadMedia(mediaID: mediaID, decryptionKey: decryptionKey)
+    }
+
+    func deleteMessage(messageID: String) async throws -> Bool {
+        try await client.deleteMessage(messageID: messageID)
+    }
+
+    func sendReaction(
+        messageID: String,
+        emoji: String,
+        action: Client_SendReactionRequest.Action
+    ) async throws {
+        try await client.sendReaction(messageID: messageID, emoji: emoji, action: action)
+    }
+
+    func updateConversationStatus(
+        conversationID: String,
+        status: Conversations_ConversationStatus
+    ) async throws {
+        try await client.updateConversationStatus(conversationID: conversationID, status: status)
+    }
+
+    func setConversationMuted(conversationID: String, isMuted: Bool) async throws {
+        try await client.setConversationMuted(conversationID: conversationID, isMuted: isMuted)
+    }
+
+    func getConversation(id conversationID: String) async throws -> Conversations_Conversation {
+        try await client.getConversation(id: conversationID)
+    }
+
+    func getOrCreateConversation(
+        numbers: [String],
+        rcsGroupName: String?,
+        createRCSGroup: Bool
+    ) async throws -> Client_GetOrCreateConversationResponse {
+        try await client.getOrCreateConversation(
+            numbers: numbers,
+            rcsGroupName: rcsGroupName,
+            createRCSGroup: createRCSGroup
+        )
+    }
+
+    func markRead(conversationID: String, messageID: String) async throws {
+        try await client.markRead(conversationID: conversationID, messageID: messageID)
+    }
+
+    func setTyping(conversationID: String, isTyping: Bool) async throws {
+        try await client.setTyping(conversationID: conversationID, isTyping: isTyping)
+    }
+
+    func registerPush(keys: PushKeys) async throws {
+        try await client.registerPush(keys: keys)
+    }
+}
+
+protocol GMClientFactoryProtocol {
+    func loadFromStore(
+        _ store: AuthDataStore,
+        eventHandler: any GMEventHandler,
+        autoReconnectAfterPairing: Bool
+    ) async throws -> (any GMClientProtocol)?
+
+    func makeClient(
+        eventHandler: any GMEventHandler,
+        autoReconnectAfterPairing: Bool
+    ) async -> any GMClientProtocol
+}
+
+struct GMLiveClientFactory: GMClientFactoryProtocol {
+    func loadFromStore(
+        _ store: AuthDataStore,
+        eventHandler: any GMEventHandler,
+        autoReconnectAfterPairing: Bool
+    ) async throws -> (any GMClientProtocol)? {
+        guard let loaded = try await GMClient.loadFromStore(
+            store,
+            eventHandler: eventHandler,
+            autoReconnectAfterPairing: autoReconnectAfterPairing
+        ) else {
+            return nil
+        }
+        return GMLiveClient(client: loaded)
+    }
+
+    func makeClient(
+        eventHandler: any GMEventHandler,
+        autoReconnectAfterPairing: Bool
+    ) async -> any GMClientProtocol {
+        let client = await GMClient(
+            eventHandler: eventHandler,
+            autoReconnectAfterPairing: autoReconnectAfterPairing
+        )
+        return GMLiveClient(client: client)
+    }
+}
+
 @MainActor
 final class GMAppModel: ObservableObject {
-    enum Screen {
+    enum Screen: Equatable {
         case loading
         case needsPairing
         case pairing
@@ -38,16 +261,24 @@ final class GMAppModel: ObservableObject {
     @Published var syncProgressText: String = ""
 
     @Published var phoneSettings: Settings_Settings?
+    @Published private(set) var pushConfiguration: GMPushConfiguration = .default
+    @Published private(set) var pushRegistrationStatusText: String = ""
+    @Published private(set) var backgroundSyncStatusText: String = ""
+    @Published private(set) var backgroundSyncLastRunAt: Date?
+    @Published private(set) var isBackgroundSyncRunning: Bool = false
 
     private let store: AuthDataStore
     private let eventHandler: GMEventStreamHandler
     private let cache: GMCacheStore
+    private let clientFactory: any GMClientFactoryProtocol
 
-    private var client: GMClient?
+    private var client: (any GMClientProtocol)?
     private var eventTask: Task<Void, Never>?
     private var reconnectTask: Task<Void, Never>?
     private var refreshConversationsTask: Task<Void, Never>?
     private var refreshMessagesTask: Task<Void, Never>?
+    private var pushRegistrationTask: Task<Void, Never>?
+    private var backgroundSyncSchedulerTask: Task<Void, Never>?
 
     private var messagesCursor: Client_Cursor?
 
@@ -67,14 +298,24 @@ final class GMAppModel: ObservableObject {
     private var linkMetadataMemory: [String: LPLinkMetadata] = [:]
     private var linkMetadataTasks: [String: Task<LPLinkMetadata?, Never>] = [:]
     private var linkPrefetchTask: Task<Void, Never>?
+    private var reconnectAttempts: Int = 0
+    private var hasStarted: Bool = false
 
     private static let lastSelectedConversationKey = "gm_last_selected_conversation_id"
 
-    init(store: AuthDataStore? = nil) {
+    init(
+        store: AuthDataStore? = nil,
+        clientFactory: (any GMClientFactoryProtocol)? = nil
+    ) {
         GMPreferences.registerDefaults()
         self.store = store ?? Self.makeDefaultStore()
         self.eventHandler = GMEventStreamHandler()
         self.cache = GMCacheStore(rootURL: self.store.directory.appendingPathComponent("Cache", isDirectory: true))
+        self.clientFactory = clientFactory ?? GMLiveClientFactory()
+        self.pushConfiguration = GMPushConfiguration.loadFromDefaults()
+        self.pushRegistrationStatusText = UserDefaults.standard.string(forKey: GMPreferences.pushRegistrationStatus) ?? ""
+        self.backgroundSyncStatusText = UserDefaults.standard.string(forKey: GMPreferences.backgroundSyncStatus) ?? ""
+        self.backgroundSyncLastRunAt = UserDefaults.standard.object(forKey: GMPreferences.backgroundSyncLastRunAt) as? Date
         GMLog.info(.app, "Init storeDir=\(self.store.directory.path)")
     }
 
@@ -87,6 +328,7 @@ final class GMAppModel: ObservableObject {
 
     func start() async {
         guard eventTask == nil else { return }
+        hasStarted = true
 
         connectionStatusText = "Starting..."
         GMLog.info(.app, "Start (store.exists=\(store.exists))")
@@ -131,26 +373,59 @@ final class GMAppModel: ObservableObject {
         }
 
         do {
-            if let loaded = try await GMClient.loadFromStore(
+            if let loaded = try await clientFactory.loadFromStore(
                 store,
                 eventHandler: eventHandler,
                 autoReconnectAfterPairing: false
             ) {
                 client = loaded
+
+                guard await loaded.isLoggedIn else {
+                    await handleSessionInvalidation(
+                        reason: "Stored session is no longer valid. Pair again.",
+                        clearError: false
+                    )
+                    GMLog.warn(.app, "Stored auth exists but isLoggedIn=false; forcing re-pair")
+                    return
+                }
+
                 screen = .ready
                 GMLog.info(.app, "Loaded auth from store, bootstrapping")
-                try await connectAndBootstrap()
+                do {
+                    try await connectAndBootstrap()
+                } catch {
+                    if Self.shouldInvalidateSession(for: error) {
+                        await handleSessionInvalidation(
+                            reason: "Session expired. Pair your phone again.",
+                            clearError: false
+                        )
+                        return
+                    }
+                    connectionStatusText = "Disconnected"
+                    errorMessage = "Failed to connect: \(error.localizedDescription)"
+                    GMLog.error(.app, "Failed to connect: \(error.localizedDescription)")
+                    scheduleReconnect(reason: "Reconnecting...", baseDelaySeconds: 1, resetAttempts: true)
+                }
             } else {
                 screen = .needsPairing
                 connectionStatusText = ""
                 GMLog.info(.app, "No auth in store; needs pairing")
             }
         } catch {
+            if Self.shouldInvalidateSession(for: error) {
+                await handleSessionInvalidation(
+                    reason: "Stored session became invalid. Pair your phone again.",
+                    clearError: false
+                )
+                return
+            }
             screen = .needsPairing
             connectionStatusText = ""
             errorMessage = "Failed to load auth: \(error.localizedDescription)"
             GMLog.error(.app, "Failed to load auth: \(error.localizedDescription)")
         }
+
+        restartBackgroundSyncSchedulerIfNeeded()
     }
 
     func startPairing() async {
@@ -161,9 +436,16 @@ final class GMAppModel: ObservableObject {
         pairingStatusText = "Requesting QR code..."
         connectionStatusText = ""
         screen = .pairing
+        backgroundSyncSchedulerTask?.cancel()
+        backgroundSyncSchedulerTask = nil
+        pushRegistrationTask?.cancel()
+        pushRegistrationTask = nil
         GMLog.info(.app, "Start pairing")
 
-        let newClient = await GMClient(eventHandler: eventHandler, autoReconnectAfterPairing: false)
+        let newClient = await clientFactory.makeClient(
+            eventHandler: eventHandler,
+            autoReconnectAfterPairing: false
+        )
         client = newClient
 
         do {
@@ -172,10 +454,8 @@ final class GMAppModel: ObservableObject {
             pairingStatusText = "Scan this QR code in Google Messages on your phone."
             GMLog.info(.app, "Pairing QR received urlLen=\(qr.count)")
 
-            // Ensure the long-poll stream is open so we don't miss the paired event.
-            try await newClient.connect()
             pairingStatusText = "Waiting for phone to pair..."
-            GMLog.info(.app, "Connected for pairing; waiting for phone")
+            GMLog.info(.app, "Waiting for phone to pair")
         } catch {
             screen = .needsPairing
             pairingStatusText = ""
@@ -205,6 +485,10 @@ final class GMAppModel: ObservableObject {
         notifiedMessageIDs.removeAll(keepingCapacity: false)
         linkPrefetchTask?.cancel()
         linkPrefetchTask = nil
+        notifiedMessageIDs.removeAll(keepingCapacity: false)
+        linkMetadataTasks.values.forEach { $0.cancel() }
+        linkMetadataTasks.removeAll(keepingCapacity: false)
+        linkMetadataMemory.removeAll(keepingCapacity: false)
         linkMetadataTasks.values.forEach { $0.cancel() }
         linkMetadataTasks.removeAll(keepingCapacity: false)
         linkMetadataMemory.removeAll(keepingCapacity: false)
@@ -215,6 +499,11 @@ final class GMAppModel: ObservableObject {
         reconnectTask = nil
         refreshMessagesTask?.cancel()
         refreshMessagesTask = nil
+        pushRegistrationTask?.cancel()
+        pushRegistrationTask = nil
+        backgroundSyncSchedulerTask?.cancel()
+        backgroundSyncSchedulerTask = nil
+        reconnectAttempts = 0
 
         messages = []
         messagesCursor = nil
@@ -222,6 +511,12 @@ final class GMAppModel: ObservableObject {
         selectedConversationID = nil
 
         if let client {
+            do {
+                try await client.unpair()
+                GMLog.info(.app, "Unpaired session on logout")
+            } catch {
+                GMLog.warn(.app, "Unpair failed during logout: \(error.localizedDescription)")
+            }
             await client.disconnect()
         }
         client = nil
@@ -240,12 +535,58 @@ final class GMAppModel: ObservableObject {
         connectionStatusText = ""
     }
 
+    func handleScenePhaseChange(_ phase: ScenePhase) async {
+        switch phase {
+        case .active:
+            GMLog.debug(.app, "Scene phase active")
+            restartBackgroundSyncSchedulerIfNeeded()
+            guard screen == .ready, let client else { return }
+            if !(await client.isConnected) {
+                scheduleReconnect(
+                    reason: "Resuming connection...",
+                    baseDelaySeconds: 0.7,
+                    resetAttempts: true
+                )
+            }
+        case .inactive:
+            GMLog.debug(.app, "Scene phase inactive")
+            restartBackgroundSyncSchedulerIfNeeded()
+        case .background:
+            GMLog.debug(.app, "Scene phase background")
+            restartBackgroundSyncSchedulerIfNeeded()
+        @unknown default:
+            break
+        }
+    }
+
+    func updatePushConfiguration(_ mutate: (inout GMPushConfiguration) -> Void) {
+        var updated = pushConfiguration
+        mutate(&updated)
+        updated = updated.sanitized()
+        if !updated.canAttemptRegistration() {
+            updated.lastRegisteredFingerprint = nil
+            updated.lastRegisteredAt = nil
+        }
+        guard updated != pushConfiguration else { return }
+        pushConfiguration = updated
+        persistPushConfiguration()
+        schedulePushRegistration(reason: "config_changed", force: false, debounceSeconds: 0.8)
+        restartBackgroundSyncSchedulerIfNeeded()
+    }
+
+    func registerPushNow() async {
+        await registerPushIfNeeded(force: true, reason: "manual")
+    }
+
+    func runBackgroundSyncNow() async {
+        await runBackgroundSync(reason: "manual", userInitiated: true)
+    }
+
     func refreshConversations() async {
         guard let client else { return }
         GMLog.debug(.network, "Refreshing conversations (network)")
         do {
-            let convs = try await client.listConversations(count: 75)
-            conversations = convs.sorted(by: { $0.lastMessageTimestamp > $1.lastMessageTimestamp })
+            conversations = try await fetchAllConversations(client: client, pageSize: 75, maxPages: 30)
             await cache.saveConversations(conversations)
             if let first = conversations.first {
                 GMLog.info(.network, "Refreshed conversations count=\(conversations.count) sample.lastMessageTimestamp=\(describeTimestamp(first.lastMessageTimestamp))")
@@ -253,16 +594,30 @@ final class GMAppModel: ObservableObject {
                 GMLog.info(.network, "Refreshed conversations count=0")
             }
 
-            if selectedConversationID == nil {
-                let savedID = UserDefaults.standard.string(forKey: Self.lastSelectedConversationKey)
-                if let savedID, conversations.contains(where: { $0.conversationID == savedID }) {
-                    selectedConversationID = savedID
-                } else {
-                    selectedConversationID = conversations.first?.conversationID
-                }
+            let previousSelection = selectedConversationID
+            let resolvedSelection = resolvePreferredConversationID(
+                previousSelection: previousSelection,
+                conversations: conversations
+            )
+            let selectionChanged = previousSelection != resolvedSelection
+            selectedConversationID = resolvedSelection
+            if let resolvedSelection {
+                UserDefaults.standard.set(resolvedSelection, forKey: Self.lastSelectedConversationKey)
+            } else {
+                UserDefaults.standard.removeObject(forKey: Self.lastSelectedConversationKey)
+            }
+
+            if selectionChanged || (messages.isEmpty && resolvedSelection != nil) {
                 await loadMessagesForSelected(reset: true, forceNetwork: false)
             }
         } catch {
+            if Self.shouldInvalidateSession(for: error) {
+                await handleSessionInvalidation(
+                    reason: "Session expired while refreshing conversations. Pair your phone again.",
+                    clearError: false
+                )
+                return
+            }
             errorMessage = "Failed to refresh conversations: \(error.localizedDescription)"
             GMLog.error(.network, "Failed to refresh conversations: \(error.localizedDescription)")
         }
@@ -347,6 +702,12 @@ final class GMAppModel: ObservableObject {
             scheduleMarkReadForSelectedIfNeeded(reason: "messages_loaded")
             scheduleLinkPreviewPrefetchIfNeeded(messages: messages)
         } catch {
+            if await handlePossibleSessionInvalidation(
+                error,
+                reason: "Session expired while loading messages. Pair your phone again."
+            ) {
+                return
+            }
             errorMessage = "Failed to load messages: \(error.localizedDescription)"
             GMLog.error(.network, "Failed to load messages conv=\(shortID(conversationID)): \(error.localizedDescription)")
         }
@@ -446,6 +807,12 @@ final class GMAppModel: ObservableObject {
                     break
                 }
             } catch {
+                if await handlePossibleSessionInvalidation(
+                    error,
+                    reason: "Session expired while syncing messages. Pair your phone again."
+                ) {
+                    return
+                }
                 errorMessage = "Sync failed: \(error.localizedDescription)"
                 break
             }
@@ -507,6 +874,12 @@ final class GMAppModel: ObservableObject {
             updateLocalOutgoingMessage(tmpID: tmpID, status: .outgoingComplete, errorText: nil)
             await cache.saveMessages(conversationID: conversationID, messages: messages, cursor: messagesCursor)
         } catch {
+            if await handlePossibleSessionInvalidation(
+                error,
+                reason: "Session expired while sending. Pair your phone again."
+            ) {
+                return
+            }
             errorMessage = "Failed to send message: \(error.localizedDescription)"
             GMLog.error(.network, "Failed to send message conv=\(shortID(conversationID)) tmpID=\(shortID(tmpID)): \(error.localizedDescription)")
             updateLocalOutgoingMessage(tmpID: tmpID, status: .outgoingFailedGeneric, errorText: error.localizedDescription)
@@ -588,6 +961,12 @@ final class GMAppModel: ObservableObject {
             updateLocalOutgoingMessage(tmpID: tmpID, status: .outgoingComplete, errorText: nil)
             await cache.saveMessages(conversationID: conversationID, messages: messages, cursor: messagesCursor)
         } catch {
+            if await handlePossibleSessionInvalidation(
+                error,
+                reason: "Session expired while sending media. Pair your phone again."
+            ) {
+                return
+            }
             errorMessage = "Failed to send media: \(error.localizedDescription)"
             GMLog.error(.media, "Failed to send media conv=\(shortID(conversationID)) tmpID=\(shortID(tmpID)) file=\(fileName): \(error.localizedDescription)")
             updateLocalOutgoingMessage(tmpID: tmpID, status: .outgoingFailedGeneric, errorText: error.localizedDescription)
@@ -602,7 +981,7 @@ final class GMAppModel: ObservableObject {
 
     private func resolveConversationForSending(
         conversationID: String,
-        client: GMClient
+        client: any GMClientProtocol
     ) async throws -> Conversations_Conversation {
         if let conv = conversations.first(where: { $0.conversationID == conversationID }),
            !conv.defaultOutgoingID.isEmpty
@@ -783,7 +1162,11 @@ final class GMAppModel: ObservableObject {
 
         do {
             await stopOutgoingTypingIfNeeded()
-            let resp = try await client.getOrCreateConversation(numbers: [normalized])
+            let resp = try await client.getOrCreateConversation(
+                numbers: [normalized],
+                rcsGroupName: nil,
+                createRCSGroup: false
+            )
             let conv = resp.conversation
             GMLog.info(.network, "Created/loaded conversation conv=\(shortID(conv.conversationID))")
 
@@ -797,6 +1180,12 @@ final class GMAppModel: ObservableObject {
                 await sendMessage(text: initialMessage)
             }
         } catch {
+            if await handlePossibleSessionInvalidation(
+                error,
+                reason: "Session expired while creating conversation. Pair your phone again."
+            ) {
+                return
+            }
             errorMessage = "Failed to create conversation: \(error.localizedDescription)"
             GMLog.error(.network, "Failed to create conversation: \(error.localizedDescription)")
         }
@@ -941,6 +1330,12 @@ final class GMAppModel: ObservableObject {
                 GMLog.info(.network, "Deleted message id=\(shortID(messageID))")
             }
         } catch {
+            if await handlePossibleSessionInvalidation(
+                error,
+                reason: "Session expired while deleting message. Pair your phone again."
+            ) {
+                return
+            }
             errorMessage = "Failed to delete message: \(error.localizedDescription)"
             GMLog.error(.network, "Failed to delete message id=\(shortID(messageID)): \(error.localizedDescription)")
         }
@@ -952,6 +1347,12 @@ final class GMAppModel: ObservableObject {
             try await client.sendReaction(messageID: messageID, emoji: emoji, action: .add)
             GMLog.info(.network, "React message id=\(shortID(messageID)) emoji=\(emoji)")
         } catch {
+            if await handlePossibleSessionInvalidation(
+                error,
+                reason: "Session expired while sending reaction. Pair your phone again."
+            ) {
+                return
+            }
             errorMessage = "Failed to send reaction: \(error.localizedDescription)"
             GMLog.error(.network, "Failed to react message id=\(shortID(messageID)): \(error.localizedDescription)")
         }
@@ -967,6 +1368,12 @@ final class GMAppModel: ObservableObject {
             GMLog.info(.network, "Set archived conv=\(shortID(conversationID)) archived=\(archived)")
             await refreshConversations()
         } catch {
+            if await handlePossibleSessionInvalidation(
+                error,
+                reason: "Session expired while updating conversation. Pair your phone again."
+            ) {
+                return
+            }
             errorMessage = "Failed to update conversation: \(error.localizedDescription)"
             GMLog.error(.network, "Failed to archive conv=\(shortID(conversationID)): \(error.localizedDescription)")
         }
@@ -979,6 +1386,12 @@ final class GMAppModel: ObservableObject {
             GMLog.info(.network, "Set muted conv=\(shortID(conversationID)) muted=\(muted)")
             await refreshConversations()
         } catch {
+            if await handlePossibleSessionInvalidation(
+                error,
+                reason: "Session expired while updating conversation. Pair your phone again."
+            ) {
+                return
+            }
             errorMessage = "Failed to update conversation: \(error.localizedDescription)"
             GMLog.error(.network, "Failed to mute conv=\(shortID(conversationID)): \(error.localizedDescription)")
         }
@@ -1033,9 +1446,12 @@ final class GMAppModel: ObservableObject {
         GMLog.info(.app, "Connecting (long poll)")
         try await client.connect()
         connectionStatusText = "Connected"
+        reconnectAttempts = 0
         GMLog.info(.app, "Connected")
 
         await refreshConversations()
+        schedulePushRegistration(reason: "startup", force: false, debounceSeconds: 0.2)
+        restartBackgroundSyncSchedulerIfNeeded()
     }
 
     private func scheduleConversationsRefresh() {
@@ -1046,29 +1462,389 @@ final class GMAppModel: ObservableObject {
         }
     }
 
-    private func scheduleReconnect(reason: String, delaySeconds: TimeInterval) {
+    private func scheduleReconnect(
+        reason: String,
+        baseDelaySeconds: TimeInterval,
+        resetAttempts: Bool
+    ) {
         reconnectTask?.cancel()
         reconnectTask = Task { [weak self] in
             guard let self else { return }
-            self.connectionStatusText = reason
-            GMLog.warn(.app, "Reconnect scheduled reason=\(reason) delay=\(delaySeconds)s")
-            try? await Task.sleep(nanoseconds: UInt64(delaySeconds * 1_000_000_000))
+            if resetAttempts {
+                self.reconnectAttempts = 0
+            }
 
-            guard let client = self.client else { return }
-            do {
-                try await client.reconnect()
-                self.connectionStatusText = "Connected"
-                GMLog.info(.app, "Reconnected")
-                await self.refreshConversations()
-            } catch {
-                self.connectionStatusText = "Disconnected"
-                self.errorMessage = "Reconnect failed: \(error.localizedDescription)"
-                GMLog.error(.app, "Reconnect failed: \(error.localizedDescription)")
+            while !Task.isCancelled {
+                self.reconnectAttempts += 1
+                let attempt = self.reconnectAttempts
+                let delay = Self.reconnectDelaySeconds(
+                    attempt: attempt,
+                    baseDelaySeconds: baseDelaySeconds
+                )
+                self.connectionStatusText = reason
+                GMLog.warn(.app, "Reconnect scheduled attempt=\(attempt) delay=\(String(format: "%.2f", delay))s reason=\(reason)")
+                do {
+                    try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                } catch {
+                    return
+                }
+
+                guard let client = self.client else { return }
+                do {
+                    try await client.reconnect()
+                    self.connectionStatusText = "Connected"
+                    self.errorMessage = nil
+                    self.reconnectAttempts = 0
+                    GMLog.info(.app, "Reconnected")
+                    await self.refreshConversations()
+                    await self.registerPushIfNeeded(force: false, reason: "reconnect")
+                    self.restartBackgroundSyncSchedulerIfNeeded()
+                    return
+                } catch {
+                    if Self.shouldInvalidateSession(for: error) {
+                        await self.handleSessionInvalidation(
+                            reason: "Session expired while reconnecting. Pair your phone again.",
+                            clearError: false
+                        )
+                        return
+                    }
+                    self.connectionStatusText = "Disconnected"
+                    self.errorMessage = "Reconnect failed (\(attempt)): \(error.localizedDescription)"
+                    GMLog.error(.app, "Reconnect failed attempt=\(attempt): \(error.localizedDescription)")
+                }
             }
         }
     }
 
-    private func handle(_ event: GMEvent) async {
+    private func fetchAllConversations(
+        client: any GMClientProtocol,
+        pageSize: Int,
+        maxPages: Int
+    ) async throws -> [Conversations_Conversation] {
+        var cursor: Client_Cursor?
+        var all: [Conversations_Conversation] = []
+        var page = 0
+
+        while page < maxPages {
+            let response = try await client.listConversationsPage(
+                count: pageSize,
+                folder: .inbox,
+                cursor: cursor
+            )
+            page += 1
+
+            all = Self.mergeConversations(existing: all, incoming: response.conversations)
+            GMLog.info(
+                .network,
+                "Conversations page=\(page) pageCount=\(response.conversations.count) total=\(all.count) cursor=\(response.hasCursor ? "yes" : "no")"
+            )
+
+            guard response.hasCursor else { break }
+            cursor = response.cursor
+        }
+
+        if page == maxPages, cursor != nil {
+            GMLog.warn(.network, "Conversation pagination hit page cap=\(maxPages); list may be truncated")
+        }
+
+        return all.sorted(by: { $0.lastMessageTimestamp > $1.lastMessageTimestamp })
+    }
+
+    private func resolvePreferredConversationID(
+        previousSelection: String?,
+        conversations: [Conversations_Conversation]
+    ) -> String? {
+        if let previousSelection,
+           conversations.contains(where: { $0.conversationID == previousSelection })
+        {
+            return previousSelection
+        }
+
+        let savedID = UserDefaults.standard.string(forKey: Self.lastSelectedConversationKey)
+        if let savedID,
+           conversations.contains(where: { $0.conversationID == savedID })
+        {
+            return savedID
+        }
+
+        return conversations.first?.conversationID
+    }
+
+    private func schedulePushRegistration(
+        reason: String,
+        force: Bool,
+        debounceSeconds: TimeInterval
+    ) {
+        pushRegistrationTask?.cancel()
+        pushRegistrationTask = Task { [weak self] in
+            guard let self else { return }
+            if debounceSeconds > 0 {
+                try? await Task.sleep(nanoseconds: UInt64(debounceSeconds * 1_000_000_000))
+                guard !Task.isCancelled else { return }
+            }
+            await self.registerPushIfNeeded(force: force, reason: reason)
+        }
+    }
+
+    private func registerPushIfNeeded(force: Bool, reason: String) async {
+        guard let client else {
+            if force {
+                setPushRegistrationStatus("Push registration failed: not connected.")
+            }
+            return
+        }
+        guard pushConfiguration.enabled else {
+            if force {
+                setPushRegistrationStatus("Push registration skipped: disabled.")
+            }
+            return
+        }
+
+        do {
+            let keys = try pushConfiguration.makePushKeys()
+            let fingerprint = try pushConfiguration.registrationFingerprint()
+            if !force, pushConfiguration.lastRegisteredFingerprint == fingerprint {
+                GMLog.debug(.network, "Skip push registration (unchanged) reason=\(reason)")
+                return
+            }
+
+            GMLog.info(.network, "Registering push reason=\(reason) endpointHost=\(URL(string: keys.url)?.host ?? "?")")
+            try await client.registerPush(keys: keys)
+
+            pushConfiguration.lastRegisteredFingerprint = fingerprint
+            pushConfiguration.lastRegisteredAt = Date()
+            persistPushConfiguration()
+            let timestamp = pushConfiguration.lastRegisteredAt?
+                .formatted(date: .numeric, time: .shortened) ?? "now"
+            setPushRegistrationStatus("Push registered (\(timestamp)).")
+            GMLog.info(.network, "Push registration succeeded reason=\(reason)")
+        } catch {
+            if Self.shouldInvalidateSession(for: error) {
+                await handleSessionInvalidation(
+                    reason: "Session expired while registering push. Pair your phone again.",
+                    clearError: false
+                )
+                return
+            }
+            setPushRegistrationStatus("Push registration failed: \(error.localizedDescription)")
+            if force {
+                errorMessage = "Push registration failed: \(error.localizedDescription)"
+            }
+            GMLog.error(.network, "Push registration failed reason=\(reason): \(error.localizedDescription)")
+        }
+    }
+
+    private func runBackgroundSync(reason: String, userInitiated: Bool) async {
+        if isBackgroundSyncRunning { return }
+        if !userInitiated, !pushConfiguration.backgroundSyncEnabled { return }
+
+        guard let client else {
+            if userInitiated {
+                setBackgroundSyncStatus("Background sync failed: not connected.")
+            }
+            return
+        }
+
+        isBackgroundSyncRunning = true
+        defer { isBackgroundSyncRunning = false }
+        let shouldRetryUncleanExit = true
+
+        for attempt in 1...2 {
+            do {
+                GMLog.info(.network, "Background sync start reason=\(reason) attempt=\(attempt)")
+                try await client.connectBackground()
+                backgroundSyncLastRunAt = Date()
+                UserDefaults.standard.set(backgroundSyncLastRunAt, forKey: GMPreferences.backgroundSyncLastRunAt)
+                let timestamp = backgroundSyncLastRunAt?
+                    .formatted(date: .numeric, time: .shortened) ?? "now"
+                setBackgroundSyncStatus("Background sync succeeded (\(timestamp)).")
+                GMLog.info(.network, "Background sync succeeded reason=\(reason) attempt=\(attempt)")
+                return
+            } catch {
+                if Self.shouldInvalidateSession(for: error) {
+                    await handleSessionInvalidation(
+                        reason: "Session expired during background sync. Pair your phone again.",
+                        clearError: false
+                    )
+                    return
+                }
+
+                let isUnclean = (error as? GMClientError) == .backgroundPollingExitedUncleanly
+                if shouldRetryUncleanExit && isUnclean && attempt == 1 {
+                    let jitter = Double.random(in: 0.4...1.3)
+                    GMLog.warn(.network, "Background sync unclean exit; retrying after \(String(format: "%.2f", jitter))s")
+                    try? await Task.sleep(nanoseconds: UInt64(jitter * 1_000_000_000))
+                    continue
+                }
+
+                let text = "Background sync failed: \(error.localizedDescription)"
+                setBackgroundSyncStatus(text)
+                if userInitiated {
+                    errorMessage = text
+                }
+                GMLog.error(.network, "Background sync failed reason=\(reason) attempt=\(attempt): \(error.localizedDescription)")
+                return
+            }
+        }
+    }
+
+    private func restartBackgroundSyncSchedulerIfNeeded() {
+        backgroundSyncSchedulerTask?.cancel()
+        backgroundSyncSchedulerTask = nil
+
+        guard hasStarted else { return }
+        guard pushConfiguration.backgroundSyncEnabled else { return }
+        guard client != nil else { return }
+
+        backgroundSyncSchedulerTask = Task { [weak self] in
+            guard let self else { return }
+            while !Task.isCancelled {
+                let currentInterval = max(
+                    GMPushConfiguration.minBackgroundSyncIntervalMinutes,
+                    self.pushConfiguration.backgroundSyncIntervalMinutes
+                )
+                GMLog.debug(.network, "Background sync scheduler sleeping \(currentInterval)m")
+                do {
+                    try await Task.sleep(nanoseconds: UInt64(currentInterval) * 60 * 1_000_000_000)
+                } catch {
+                    return
+                }
+                guard !Task.isCancelled else { return }
+                await self.runBackgroundSync(reason: "scheduled_\(currentInterval)m", userInitiated: false)
+            }
+        }
+    }
+
+    private func persistPushConfiguration() {
+        pushConfiguration.saveToDefaults()
+    }
+
+    private func setPushRegistrationStatus(_ text: String) {
+        pushRegistrationStatusText = text
+        UserDefaults.standard.set(text, forKey: GMPreferences.pushRegistrationStatus)
+    }
+
+    private func setBackgroundSyncStatus(_ text: String) {
+        backgroundSyncStatusText = text
+        UserDefaults.standard.set(text, forKey: GMPreferences.backgroundSyncStatus)
+    }
+
+    private func handleSessionInvalidation(reason: String, clearError: Bool) async {
+        GMLog.warn(.app, "Session invalidation reason=\(reason)")
+        reconnectTask?.cancel()
+        reconnectTask = nil
+        reconnectAttempts = 0
+        refreshConversationsTask?.cancel()
+        refreshConversationsTask = nil
+        refreshMessagesTask?.cancel()
+        refreshMessagesTask = nil
+        pushRegistrationTask?.cancel()
+        pushRegistrationTask = nil
+        backgroundSyncSchedulerTask?.cancel()
+        backgroundSyncSchedulerTask = nil
+        markReadTask?.cancel()
+        markReadTask = nil
+        outgoingTypingStopTask?.cancel()
+        outgoingTypingStopTask = nil
+        remoteTypingClearTask?.cancel()
+        remoteTypingClearTask = nil
+        linkPrefetchTask?.cancel()
+        linkPrefetchTask = nil
+
+        if let client {
+            await client.disconnect()
+        }
+        client = nil
+
+        do {
+            try store.delete()
+        } catch {
+            GMLog.warn(.app, "Failed to delete auth store during invalidation: \(error.localizedDescription)")
+        }
+        await cache.clearAll()
+
+        UserDefaults.standard.removeObject(forKey: Self.lastSelectedConversationKey)
+        pairingQRCodeURL = nil
+        pairingStatusText = ""
+        typingIndicatorText = nil
+        outgoingTypingIsActive = false
+        outgoingTypingConversationID = nil
+        messages = []
+        messagesCursor = nil
+        conversations = []
+        selectedConversationID = nil
+        phoneSettings = nil
+        connectionStatusText = ""
+        screen = .needsPairing
+        if clearError {
+            errorMessage = nil
+        } else {
+            errorMessage = reason
+        }
+    }
+
+    private func handlePossibleSessionInvalidation(_ error: Error, reason: String) async -> Bool {
+        guard Self.shouldInvalidateSession(for: error) else { return false }
+        await handleSessionInvalidation(reason: reason, clearError: false)
+        return true
+    }
+
+    nonisolated static func shouldInvalidateSession(for error: Error) -> Bool {
+        if let clientError = error as? GMClientError, clientError == .notLoggedIn {
+            return true
+        }
+        if let httpError = error as? GMHTTPError {
+            if case .httpError(let statusCode, _) = httpError {
+                return isAuthInvalidatingStatusCode(statusCode)
+            }
+        }
+        if let urlError = error as? URLError, urlError.code == .userAuthenticationRequired {
+            return true
+        }
+        return false
+    }
+
+    nonisolated static func isAuthInvalidatingStatusCode(_ statusCode: Int) -> Bool {
+        statusCode == 401 || statusCode == 403
+    }
+
+    nonisolated static func reconnectDelaySeconds(
+        attempt: Int,
+        baseDelaySeconds: TimeInterval
+    ) -> TimeInterval {
+        let safeAttempt = max(1, attempt)
+        let exp = min(pow(2.0, Double(safeAttempt - 1)), 64.0)
+        let raw = baseDelaySeconds * exp
+        let capped = min(90.0, max(baseDelaySeconds, raw))
+        let jitter = Double.random(in: 0...(min(1.2, capped * 0.25)))
+        return capped + jitter
+    }
+
+    nonisolated static func mergeConversations(
+        existing: [Conversations_Conversation],
+        incoming: [Conversations_Conversation]
+    ) -> [Conversations_Conversation] {
+        guard !incoming.isEmpty else { return existing }
+
+        var map: [String: Conversations_Conversation] = [:]
+        map.reserveCapacity(existing.count + incoming.count)
+        for conv in existing where !conv.conversationID.isEmpty {
+            map[conv.conversationID] = conv
+        }
+
+        for conv in incoming where !conv.conversationID.isEmpty {
+            guard let previous = map[conv.conversationID] else {
+                map[conv.conversationID] = conv
+                continue
+            }
+            if conv.lastMessageTimestamp >= previous.lastMessageTimestamp {
+                map[conv.conversationID] = conv
+            }
+        }
+        return Array(map.values)
+    }
+
+    func handle(_ event: GMEvent) async {
         switch event {
         case .qrCode(let url):
             pairingQRCodeURL = url
@@ -1097,6 +1873,8 @@ final class GMAppModel: ObservableObject {
                 connectionStatusText = "Connected"
                 GMLog.info(.events, "Reconnect after pairing succeeded")
                 await refreshConversations()
+                schedulePushRegistration(reason: "pair_success", force: false, debounceSeconds: 0.2)
+                restartBackgroundSyncSchedulerIfNeeded()
             } catch {
                 screen = .ready
                 connectionStatusText = "Disconnected"
@@ -1144,12 +1922,13 @@ final class GMAppModel: ObservableObject {
             handleTypingEvent(data)
 
         case .listenTemporaryError(let error):
-            scheduleReconnect(reason: "Reconnecting...", delaySeconds: 2)
+            connectionStatusText = "Reconnecting..."
             self.errorMessage = "Temporary listen error: \(error.localizedDescription)"
             GMLog.warn(.events, "Event listenTemporaryError: \(error.localizedDescription)")
 
         case .listenFatalError(let error):
-            scheduleReconnect(reason: "Reconnecting...", delaySeconds: 2)
+            scheduleReconnect(reason: "Reconnecting...", baseDelaySeconds: 1, resetAttempts: false)
+            connectionStatusText = "Reconnecting..."
             self.errorMessage = "Fatal listen error: \(error.localizedDescription)"
             GMLog.error(.events, "Event listenFatalError: \(error.localizedDescription)")
 
@@ -1185,7 +1964,10 @@ final class GMAppModel: ObservableObject {
             break
 
         case .gaiaLoggedOut:
-            errorMessage = "Logged out"
+            await handleSessionInvalidation(
+                reason: "Google account session ended. Pair your phone again.",
+                clearError: false
+            )
             GMLog.warn(.events, "Event gaiaLoggedOut")
 
         case .accountChange:
@@ -1196,11 +1978,24 @@ final class GMAppModel: ObservableObject {
             GMLog.error(.events, "Event requestError action=\(info.action)")
 
         case .httpError(let info):
+            if Self.isAuthInvalidatingStatusCode(info.statusCode) {
+                await handleSessionInvalidation(
+                    reason: "Authentication failed (\(info.statusCode)). Pair your phone again.",
+                    clearError: false
+                )
+                return
+            }
             errorMessage = "HTTP error (\(info.statusCode)) (\(info.action))"
             GMLog.error(.events, "Event httpError action=\(info.action) status=\(info.statusCode)")
 
         case .authTokenRefreshed:
-            break
+            do {
+                try await client?.saveAuthData(to: store)
+                GMLog.debug(.events, "Persisted auth after token refresh")
+                schedulePushRegistration(reason: "auth_token_refreshed", force: false, debounceSeconds: 0.5)
+            } catch {
+                GMLog.warn(.events, "Failed to persist auth after token refresh: \(error.localizedDescription)")
+            }
         }
     }
 

@@ -19,6 +19,12 @@ enum GMPreferences {
     static let linkPreviewsEnabled = "gm_pref_link_previews_enabled"
     static let autoLoadLinkPreviews = "gm_pref_auto_load_link_previews"
 
+    // Backend / push sync
+    static let pushConfigurationJSON = "gm_pref_push_configuration_json"
+    static let pushRegistrationStatus = "gm_pref_push_registration_status"
+    static let backgroundSyncStatus = "gm_pref_background_sync_status"
+    static let backgroundSyncLastRunAt = "gm_pref_background_sync_last_run_at"
+
     static func registerDefaults() {
         UserDefaults.standard.register(defaults: [
             notificationsEnabled: true,
@@ -34,6 +40,10 @@ enum GMPreferences {
 
             linkPreviewsEnabled: true,
             autoLoadLinkPreviews: true,
+
+            pushConfigurationJSON: "{}",
+            pushRegistrationStatus: "",
+            backgroundSyncStatus: "",
         ])
     }
 }

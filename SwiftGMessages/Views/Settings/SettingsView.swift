@@ -83,6 +83,71 @@ struct SettingsView: View {
                     .disabled(!linkPreviewsEnabled)
             }
 
+            Section("Backend / Push & Sync") {
+                Toggle("Enable push registration", isOn: pushEnabledBinding)
+
+                TextField("Push endpoint URL", text: pushEndpointBinding)
+
+                TextField("p256dh (base64 or base64url)", text: pushP256dhBinding, axis: .vertical)
+                    .lineLimit(1...3)
+                    .font(.system(.caption, design: .monospaced))
+
+                TextField("auth (base64 or base64url)", text: pushAuthBinding, axis: .vertical)
+                    .lineLimit(1...2)
+                    .font(.system(.caption, design: .monospaced))
+
+                Toggle("Enable scheduled background sync", isOn: backgroundSyncEnabledBinding)
+
+                Stepper(
+                    "Background sync interval: \(model.pushConfiguration.backgroundSyncIntervalMinutes) minutes",
+                    value: backgroundSyncIntervalBinding,
+                    in: GMPushConfiguration.minBackgroundSyncIntervalMinutes...GMPushConfiguration.maxBackgroundSyncIntervalMinutes
+                )
+                .disabled(!model.pushConfiguration.backgroundSyncEnabled)
+
+                HStack(spacing: 10) {
+                    Button("Register Push Now") {
+                        Task { await model.registerPushNow() }
+                    }
+
+                    Button("Run Background Sync") {
+                        Task { await model.runBackgroundSyncNow() }
+                    }
+                }
+
+                LabeledContent("Registration status") {
+                    Text(model.pushRegistrationStatusText.isEmpty ? "Not registered yet" : model.pushRegistrationStatusText)
+                        .foregroundStyle(.secondary)
+                }
+
+                LabeledContent("Last registration") {
+                    if let d = model.pushConfiguration.lastRegisteredAt {
+                        Text(d.formatted(date: .numeric, time: .shortened))
+                    } else {
+                        Text("Never")
+                    }
+                }
+
+                LabeledContent("Background sync status") {
+                    let base = model.backgroundSyncStatusText.isEmpty ? "No background sync yet" : model.backgroundSyncStatusText
+                    if model.isBackgroundSyncRunning {
+                        Text("Running... \(base)")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Text(base)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                LabeledContent("Last background sync") {
+                    if let d = model.backgroundSyncLastRunAt {
+                        Text(d.formatted(date: .numeric, time: .shortened))
+                    } else {
+                        Text("Never")
+                    }
+                }
+            }
+
             Section("Debug") {
                 LabeledContent("Connection") { Text(model.connectionStatusText.isEmpty ? "Unknown" : model.connectionStatusText) }
 
@@ -92,7 +157,7 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(minWidth: 520, minHeight: 520)
+        .frame(minWidth: 620, minHeight: 620)
         .task {
             systemNotificationStatus = await GMNotifications.authorizationStatus()
         }
@@ -121,5 +186,59 @@ struct SettingsView: View {
         case .ephemeral: return "Ephemeral"
         @unknown default: return "Unknown"
         }
+    }
+
+    private var pushEnabledBinding: Binding<Bool> {
+        Binding(
+            get: { model.pushConfiguration.enabled },
+            set: { value in
+                model.updatePushConfiguration { $0.enabled = value }
+            }
+        )
+    }
+
+    private var pushEndpointBinding: Binding<String> {
+        Binding(
+            get: { model.pushConfiguration.endpointURL },
+            set: { value in
+                model.updatePushConfiguration { $0.endpointURL = value }
+            }
+        )
+    }
+
+    private var pushP256dhBinding: Binding<String> {
+        Binding(
+            get: { model.pushConfiguration.p256dh },
+            set: { value in
+                model.updatePushConfiguration { $0.p256dh = value }
+            }
+        )
+    }
+
+    private var pushAuthBinding: Binding<String> {
+        Binding(
+            get: { model.pushConfiguration.auth },
+            set: { value in
+                model.updatePushConfiguration { $0.auth = value }
+            }
+        )
+    }
+
+    private var backgroundSyncEnabledBinding: Binding<Bool> {
+        Binding(
+            get: { model.pushConfiguration.backgroundSyncEnabled },
+            set: { value in
+                model.updatePushConfiguration { $0.backgroundSyncEnabled = value }
+            }
+        )
+    }
+
+    private var backgroundSyncIntervalBinding: Binding<Int> {
+        Binding(
+            get: { model.pushConfiguration.backgroundSyncIntervalMinutes },
+            set: { value in
+                model.updatePushConfiguration { $0.backgroundSyncIntervalMinutes = value }
+            }
+        )
     }
 }

@@ -20,7 +20,7 @@ final class SwiftGMessagesUITestsLaunchTests: XCTestCase {
     @MainActor
     func testLaunch() throws {
         let app = XCUIApplication()
-        app.launch()
+        activateAndAssertForeground(app)
 
         // Insert steps here to perform after app launch but before taking a screenshot,
         // such as logging into a test account or navigating somewhere in the app
@@ -29,5 +29,14 @@ final class SwiftGMessagesUITestsLaunchTests: XCTestCase {
         attachment.name = "Launch Screen"
         attachment.lifetime = .keepAlways
         add(attachment)
+    }
+
+    @MainActor
+    private func activateAndAssertForeground(_ app: XCUIApplication) {
+        app.activate()
+        XCTAssertTrue(
+            app.wait(for: .runningForeground, timeout: 20),
+            "Expected app to be running in foreground but got state \(app.state.rawValue)"
+        )
     }
 }
