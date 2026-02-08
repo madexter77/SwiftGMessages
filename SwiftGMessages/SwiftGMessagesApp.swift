@@ -6,12 +6,33 @@
 //
 
 import SwiftUI
+import UserNotifications
 
 @main
 struct SwiftGMessagesApp: App {
+    @StateObject private var model = GMAppModel()
+
+    init() {
+        UNUserNotificationCenter.current().delegate = GMNotificationDelegate.shared
+    }
+
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .environmentObject(model)
+                .task {
+                    await model.start()
+                }
+                #if os(macOS)
+                .frame(minWidth: 980, minHeight: 640)
+                #endif
         }
+
+        #if os(macOS)
+        Settings {
+            SettingsView()
+                .environmentObject(model)
+        }
+        #endif
     }
 }

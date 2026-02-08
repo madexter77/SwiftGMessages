@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		B77EB5F781A5AD38732D266A /* LibGM in Frameworks */ = {isa = PBXBuildFile; productRef = 0CCC92F2B6FBEB5996CEA20A /* LibGM */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		1F3694BE2EE5383100189545 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -52,6 +56,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B77EB5F781A5AD38732D266A /* LibGM in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -112,6 +117,7 @@
 			);
 			name = SwiftGMessages;
 			packageProductDependencies = (
+				0CCC92F2B6FBEB5996CEA20A /* LibGM */,
 			);
 			productName = SwiftGMessages;
 			productReference = 1F3694B02EE5383000189545 /* SwiftGMessages.app */;
@@ -195,6 +201,9 @@
 			);
 			mainGroup = 1F3694A72EE5383000189545;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				B1CFB6DCA179C7E722714C35 /* XCLocalSwiftPackageReference "../swift-gmessages" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 1F3694B12EE5383000189545 /* Products */;
 			projectDirPath = "";
@@ -390,6 +399,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = SwiftGMessages/SwiftGMessages.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 6UHAW5UAT4;
@@ -434,6 +444,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = SwiftGMessages/SwiftGMessages.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 6UHAW5UAT4;
@@ -615,6 +626,21 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		B1CFB6DCA179C7E722714C35 /* XCLocalSwiftPackageReference "../swift-gmessages" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = "../swift-gmessages";
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		0CCC92F2B6FBEB5996CEA20A /* LibGM */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B1CFB6DCA179C7E722714C35 /* XCLocalSwiftPackageReference "../swift-gmessages" */;
+			productName = LibGM;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 1F3694A82EE5383000189545 /* Project object */;
 }
