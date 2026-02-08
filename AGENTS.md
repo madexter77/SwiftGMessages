@@ -1,8 +1,14 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-`SwiftGMessages/` contains the app source (SwiftUI views, app state, networking/event handling, caching, logging, and preferences). Core state lives in `SwiftGMessages/GMAppModel.swift`, and related infrastructure is split into focused files such as `SwiftGMessages/GMEventStreamHandler.swift`, `SwiftGMessages/GMCacheStore.swift`, and `SwiftGMessages/GMNotifications.swift`.  
-`SwiftGMessages/Assets.xcassets` stores icons/colors/image assets.  
+`SwiftGMessages/` is organized by app layer and feature:  
+- `SwiftGMessages/App/` contains app entry and shell composition (`SwiftGMessagesApp`, `ContentView`).  
+- `SwiftGMessages/Models/` contains app state and preferences (`GMAppModel`, `GMPreferences`).  
+- `SwiftGMessages/Services/` contains networking/event handling, cache, and notifications (`GMEventStreamHandler`, `GMCacheStore`, `GMNotifications`).  
+- `SwiftGMessages/Utilities/` contains shared helpers and styling (`GMLog`, `GMDate`, `IMStyle`).  
+- `SwiftGMessages/Views/` contains SwiftUI feature views grouped by domain (`Messages/`, `Pairing/`, `Settings/`).  
+- `SwiftGMessages/Assets.xcassets` stores icons/colors/image assets.  
+- `SwiftGMessages/SwiftGMessages.entitlements` contains app entitlement configuration.  
 `SwiftGMessagesTests/` contains unit tests (Swift Testing).  
 `SwiftGMessagesUITests/` contains UI and launch tests (XCTest).
 
